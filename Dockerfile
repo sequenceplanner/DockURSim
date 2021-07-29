@@ -1,11 +1,11 @@
 FROM lsiobase/guacgui:latest
 
 # Set Version Information
-ARG BUILD_DATE="15/08/19"
-ARG VERSION="5.4.2.76197"
+ARG BUILD_DATE="29/07/21"
+ARG VERSION="5.11.1.108318"
 LABEL build_version="URSim Version: ${VERSION} Build Date: ${BUILD_DATE}"
-LABEL maintainer="Arran Hobson Sayers"
-LABEL MAINTAINER="Arran Hobson Sayers"
+LABEL maintainer="Arran Hobson Sayers / Kristofer Bengtsson"
+LABEL MAINTAINER="Arran Hobson Sayers / Kristofer Bengtsson"
 ENV APPNAME="URSim"
 
 # Set Timezone
@@ -19,7 +19,7 @@ ENV DEBIAN_FRONTEND noninteractive
 ENV HOME /ursim
 
 # Set robot model - Can be UR3, UR5 or UR10
-ENV ROBOT_MODEL UR5
+ENV ROBOT_MODEL UR10
 
 RUN \
     echo "**** Installing Dependencies ****" && \
@@ -37,7 +37,7 @@ RUN \
     # Make sure we are in the root
     cd / && \ 
     # Download URSim Linux tar.gz
-    curl https://s3-eu-west-1.amazonaws.com/ur-support-site/54411/URSim_Linux-5.4.2.76197.tar.gz -o URSim-Linux.tar.gz && \
+    curl https://s3-eu-west-1.amazonaws.com/ur-support-site/118926/URSim_Linux-5.11.1.108318.tar.gz -o URSim-Linux.tar.gz && \
     # Extract tarball
     tar xvzf URSim-Linux.tar.gz && \
     #Remove the tarball
@@ -90,8 +90,5 @@ EXPOSE 502
 # Interface Ports
 EXPOSE 29999
 EXPOSE 30001-30004
-
-# Mount Volumes
-VOLUME /ursim
 
 ENTRYPOINT ["/init"]
