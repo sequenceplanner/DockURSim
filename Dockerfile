@@ -4,8 +4,8 @@ FROM lsiobase/guacgui:latest
 ARG BUILD_DATE="29/07/21"
 ARG VERSION="5.11.1.108318"
 LABEL build_version="URSim Version: ${VERSION} Build Date: ${BUILD_DATE}"
-LABEL maintainer="Arran Hobson Sayers / Kristofer Bengtsson"
-LABEL MAINTAINER="Arran Hobson Sayers / Kristofer Bengtsson"
+LABEL maintainer="Arran Hobson Sayers"
+LABEL MAINTAINER="Arran Hobson Sayers"
 ENV APPNAME="URSim"
 
 # Set Timezone
@@ -43,12 +43,13 @@ RUN \
     #Remove the tarball
     rm URSim-Linux.tar.gz && \
     # Rename the URSim folder to jus ursim 
-    mv  /ursim* /ursim
+    mv  /ursim* /ursim && \
 
 RUN \
     echo "**** Installing URSim ****" && \
     # cd to ursim folder
     cd /ursim && \
+    mkdir /ursim/programs/ && \
     # Make URControl and all sh files executable
     chmod +x ./*.sh ./URControl && \
     #
