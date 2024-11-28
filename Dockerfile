@@ -1,22 +1,13 @@
-FROM lsiobase/guacgui:latest
+FROM ghcr.io/linuxserver/baseimage-kasmvnc:ubuntujammy
 
-# Set Version Information
-ARG BUILD_DATE="29/07/21"
-ARG VERSION="5.11.1.108318"
-LABEL build_version="URSim Version: ${VERSION} Build Date: ${BUILD_DATE}"
-LABEL maintainer="Arran Hobson Sayers"
-LABEL MAINTAINER="Arran Hobson Sayers"
 ENV APPNAME="URSim"
 
-# Set Timezone
-ARG TZ="Europe/London"
-ENV TZ ${TZ}
+ENV PUID=1000
+ENV PGID=1000
+ENV NO_FULL=TRUE
 
 # Setup Environment
 ENV DEBIAN_FRONTEND noninteractive
-
-# Set Home Directory
-ENV HOME /ursim
 
 # Set robot model - Can be UR3, UR5 or UR10
 ENV ROBOT_MODEL UR10
@@ -25,71 +16,76 @@ RUN \
     echo "**** Installing Dependencies ****" && \
     apt-get update && \
     apt-get install -qy --no-install-recommends \
-    openjdk-8-jre psmisc && \
+    openjdk-8-jre psmisc libgcc1 libstdc++6 libc6 libcap2-bin binutils && \
     # Change java alternatives so we use openjdk8 (required by URSim) not openjdk11 that comes with guacgui
     update-alternatives --install /usr/bin/java java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java 10000
 
 # Setup JAVA_HOME
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
 
+WORKDIR /config
+
 RUN \
     echo "**** Downloading URSim ****" && \
-    # Make sure we are in the root
-    cd / && \ 
     # Download URSim Linux tar.gz
-    curl https://s3-eu-west-1.amazonaws.com/ur-support-site/118926/URSim_Linux-5.11.1.108318.tar.gz -o URSim-Linux.tar.gz && \
+    curl https://s3-eu-west-1.amazonaws.com/ur-support-site/224811/URSim_Linux-5.17.0.128818.tar.gz -o URSim-Linux.tar.gz && \
     # Extract tarball
     tar xvzf URSim-Linux.tar.gz && \
-    #Remove the tarball
+    # Remove the tarball
     rm URSim-Linux.tar.gz && \
-    # Rename the URSim folder to jus ursim 
-    mv  /ursim* /ursim && \
+    # Rename the URSim folder to jus ursim
+    mv  ursim-* ursim
+
+# hack libxml to work on newer ubuntu.
+RUN mkdir temp_deps
+RUN cp ursim/ursim-dependencies/libxmlrpc-c-ur_1.33.14_amd64.deb temp_deps/
 
 RUN \
-    echo "**** Installing URSim ****" && \
-    # cd to ursim folder
-    cd /ursim && \
-    mkdir /ursim/programs/ && \
-    # Make URControl and all sh files executable
-    chmod +x ./*.sh ./URControl && \
-    #
-    # Stop install of unnecessary packages and install required ones quietly
-    sed -i 's|apt-get -y install|apt-get -qy install --no-install-recommends|g' ./install.sh && \
-    # Skip xterm command. We dont have a desktop
-    sed -i 's|tty -s|(exit 0)|g' install.sh && \
-    # Skip Check of Java Version as we have the correct installed and the command will fail
-    sed -i 's|needToInstallJava$|(exit 0)|g' install.sh && \
-    # Skip install of desktop shortcuts - we dont have a desktop
-    sed -i '/for TYPE in UR3 UR5 UR10/,$ d' ./install.sh  && \
-    # Remove commands that are not relevant on docker as we are root user
-    sed -i 's|pkexec ||g' ./install.sh && \ 
-    sed -i 's|sudo ||g' ./install.sh && \
-    sed -i 's|sudo ||g' ./ursim-certificate-check.sh && \
-    #
-    # Install URSim
-    ./install.sh && \
-    #
-    echo "Installed URSim"
+  cd temp_deps && \
+  ls -l && \
+  ar x libxmlrpc-c-ur_1.33.14_amd64.deb && \
+  mkdir temp && \
+  tar -C temp -zxf control.tar.gz && \
+  sed -i 's/lib32gcc1/lib32gcc-s1/' temp/control && \
+  sed -i 's/>= 1:4.1.1/= 12.3.0-1ubuntu1~22.04/' temp/control && \
+  cd temp && \
+  ls -l && \
+  tar cfz control.tar.gz * && mv control.tar.gz .. && \
+  cd .. && \
+  ar r libxmlrpc-c-ur_1.33.14_amd64.deb debian-binary control.tar.gz data.tar.gz && \
+  mv libxmlrpc-c-ur_1.33.14_amd64.deb ../ursim/ursim-dependencies/libxmlrpc-c-ur_1.33.14_amd64.deb
 
-RUN \     
-    echo "**** Clean Up ****" && \
-    rm -rf \
-    /tmp/* \
-    /var/lib/apt/lists/* \
-    /var/tmp/*
+# patch install script
+RUN cd ursim && \
+    sed -i 's/^\s*needToInstallJava$/#needToInstallJava/' install.sh &&\
+    sed -i 's/^\s*installDaemonManager$/#installDaemonManager/' install.sh &&\
+    sed -i 's/^\s*tty -s$/#tty -s/' install.sh &&\
+    sed -i 's/^\s*pushd/#pushd/' install.sh &&\
+    sed -i 's/^\s*chmod/#chmod/' install.sh &&\
+    sed -i 's/^\s*popd/#popd/' install.sh &&\
+    sed -i 's/lib32gcc1/lib32gcc-s1/' install.sh &&\
+    sed -i 's/libcurl3/libcurl4/' install.sh &&\
+    sed -i 's/apt-get -y/apt-get -y --force-yes/g' install.sh
 
-# Copy ursim run service script
-COPY ursim /etc/services.d/ursim
+RUN mkdir -p /config/Desktop
 
-# Expose ports 
-# Guacamole web browser viewer
-EXPOSE 8080
-# VNC viewer
-EXPOSE 3389
+# run install script
+RUN cd ursim && HOME=/config DEBIAN_FRONTEND="noninteractive" ./install.sh
+
+# default installation makes it so we dont have to confirm safety on startup
+COPY default.installation ursim/default.installation
+RUN cp ursim/default.installation ursim/programs.UR3/
+RUN cp ursim/default.installation ursim/programs.UR5/
+RUN cp ursim/default.installation ursim/programs.UR10/
+RUN cp ursim/default.installation ursim/programs.UR20/
+
+RUN chown -R 1000:1000 ursim
+
+COPY /root /
+
+# Expose ports
 # Modbus Port
 EXPOSE 502
 # Interface Ports
 EXPOSE 29999
 EXPOSE 30001-30004
-
-ENTRYPOINT ["/init"]
